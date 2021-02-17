@@ -16,3 +16,142 @@ getwd()
 
 **The distinction between names and values, and when R will copy an object.**
 
+Question 1
+
+Given the following data frame, how do I create a new column called “3” that contains the sum of 1 and 2? You may only use $, not [[. What makes 1, 2, and 3 challenging as variable names?
+
+```{r}
+df <- data.frame(runif(3), runif(3))
+names(df) <- c(1,2)
+df
+df$`3` <- df$`1` + df$`2` # needs the backticks to work 
+
+df
+```
+
+
+```{r}
+# We’ll use the lobstr package to dig into the internal representation of R objects.
+#install.packages("lobstr")
+library(lobstr)
+```
+
+### Binding basics
+
+Consider the code:
+
+```{r}
+x <- c(1, 2, 3)
+```
+
+Accurate to say:
+
+It’s creating an object, a vector of values, c(1, 2, 3).
+And it’s binding that object to a name, x.
+
+The object, or value, doesn’t have a name; it’s actually the name that has a value.
+
+The name binds or references a value, which here is the vector.
+
+Think of a name as a reference to a value. For example the code below doesn't create another copy of c(1, 2, 3), you actually get another binding to the existing object:
+
+```{r}
+y <- x
+```
+
+
+You can access an object’s identifier with lobstr::obj_addr(). Doing so allows you to see that both x and y point to the same identifier:
+
+```{r}
+obj_addr(x)
+
+obj_addr(y)
+# they have the same identifier - which indicates where in memory the value is stored.
+```
+These identifiers are long, and change every time you restart R.
+
+**It can take some time to get your head around the distinction between names and values, but understanding this is really helpful in functional programming where functions can have different names in different contexts.**
+
+### Non-syntactic names
+
+R has rules around what constitutes a valid name. A **syntactic** name must consist of letters, digits, `.` and `_` but can't begin with `_` or a digit. In addition you can't use any of the reserved words like `TRUE`, `NULL`, `if` and `function`. There is a complete list (`?Reserved`). A name that doesn't follow these rules is non-syntactic and will cause an error:
+
+```{r}
+_abc <- 1
+```
+
+```{r}
+if <- 10
+```
+
+It is possible to use any name by using backticks:
+
+```{r}
+`_abc` <- 1
+`_abc`
+`if` <- 10
+`if`
+```
+Such instances may occur when loading data created outside of R.
+
+**You can also create non-syntactic bindings using single or double quotes (e.g. "_abc" <- 1) instead of backticks, but you shouldn’t, because you’ll have to use a different syntax to retrieve the values. The ability to use strings on the left hand side of the assignment arrow is an historical artefact, used before R supported backticks.**
+
+#### Exercises
+
+1. Explain the relationship between a, b, c and d in the following code:
+
+```{r}
+a <- 1:10
+b <- a
+c <- b
+d <- 1:10
+```
+
+
+```{r}
+obj_addr(a)
+obj_addr(b)
+obj_addr(c)
+obj_addr(d)
+
+# a, b and c are all the same - they are referencing the same object, as confirmed by the objects address
+# d has created a new object, confirmed by the different object address
+```
+
+2. The following code accesses the mean function in multiple ways. Do they all point to the same underlying function object? Verify this with lobstr::obj_addr().
+
+```{r}
+mean
+base::mean
+get("mean")
+evalq(mean)
+match.fun("mean")
+
+# all the above point to the same underlying function, as confirmed by the the address associated with each (bytecode below)
+# They are also all in the same environment
+```
+
+3. base R data import functions, like read.csv(), will automatically convert non-syntactic names to syntactic ones. Why might this be problematic? What option allows you to suppress this behaviour?
+
+```{r}
+?read.csv
+# the check.names argument:
+# logical. If TRUE then the names of the variables in the data frame are checked to ensure that they are syntactically valid variable names. If necessary they are adjusted (by make.names) so that they are, and also to ensure that there are no duplicates.
+# this could be an problem if it resulsts in information about the variable being lost.
+```
+
+4. What rules does make.names() use to convert non-syntactic names into syntactic ones?
+
+```{r}
+?make.names
+# A syntactically valid name consists of letters, numbers and the dot or underline characters and starts with a letter or the dot not followed by a number. Names such as ".2way" are not valid, and neither are the reserved words.
+# 
+# The definition of a letter depends on the current locale, but only ASCII digits are considered to be digits.
+# 
+# The character "X" is prepended if necessary. All invalid characters are translated to ".". A missing value is translated to "NA". Names which match R keywords have a dot appended to them. Duplicated values are altered by make.unique.
+```
+
+5. Why is .123e1 not a syntactic name? -- as above
+
+### Copy-on-modify
+
