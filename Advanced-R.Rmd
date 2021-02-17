@@ -153,5 +153,85 @@ match.fun("mean")
 
 5. Why is .123e1 not a syntactic name? -- as above
 
-### Copy-on-modify
+### Copy on modify
 
+Consider the following code. It binds x and y to the same underlying value, then modifies y
+
+```{r}
+x <- c(1, 2, 3)
+y <- x
+
+y[[3]] <- 4
+print(x)
+
+print(y)
+```
+
+Modifying y clearly didn’t modify x. So what happened to the shared binding? While the value associated with y changed, the original object did not. Instead, R created a new object, 0xcd2, a copy of 0x74b with one value changed, then rebound y to that object.
+
+This is referred to as **copy-on-modify**. **Understanding this concept significantly improves understanding the performance of R code.** With copy on modify you get different results in R Studio, as the environment pane makes a reference to each object to display information about it. For experimentation here it was therefore suggested to use R Markdown or the terminal.
+
+#### tracemem()
+
+You can see when an object gets copied with the help of base::tracemem(). Once you call that function with an object, you’ll get the object’s current address:
+
+```{r}
+x <- c(1, 2, 3)
+cat(tracemem(x), "\n")
+
+```
+Now, whenever the object is copied, `tracemem()` will print a message telling you which object was copied, its new address, and the sequence of calls that led to the copy:
+
+```{r}
+y <- x
+y[[3]] <- 4L
+```
+If we modify y again, it doesn't get copied. This is as the new object now only has a single name bound to it, so R applies **modify-in-place optimisation.**
+
+```{r}
+y[[3]] <- 5L
+
+# untracemem() turns tracing off:
+untracemem(x)
+```
+
+
+```{r}
+original <- c(10, 20, 30, 40, 50)
+cat(tracemem(original), "\n")
+
+copy <- original
+copy[[5]] <- 100
+
+
+```
+```{r}
+copy
+copy[[5]] <- 200
+untracemem(copy)
+```
+
+
+#### Function calls
+
+The same rules for copying also apply to function calls. Take this code:
+
+```{r}
+f <- function(a) {
+  a
+}
+
+x <- c(1, 2, 3)
+cat(tracemem(x), "\n")
+
+z <- f(x)
+# there is no copy here
+
+untracemem(x)
+```
+
+While f() is running, the a inside the function points to the same value as the x does outside the function.
+
+Once f() completes, x and z point to the same object. The object (the value) never gets copied because it never gets modified. If f() did modify x, R would create a new copy, and then z would bind that object.
+
+#### Lists
