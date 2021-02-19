@@ -349,3 +349,247 @@ ref(x)
 
 ### Obeject size
 
+Can check the size of an object with `lobstr::obj_size()`
+
+```{r}
+obj_size(letters)
+obj_size(ggplot2::diamonds)
+```
+Since the elements of lists are references to values, the size of a list are smaller than you expect:
+
+```{r}
+x <- runif(1e6)
+obj_size(x)
+
+y <- list(x, x, x)
+obj_size(y)
+```
+y is only 80 bytes^14 bigger than x. That’s the size of an empty list with three elements:
+
+```{r}
+obj_size(list(NULL, NULL, NULL))
+```
+This is because y just references x three times, it doesn't copy the values.
+
+Similarly, because R uses a global string pool character vectors take up less memory than you might expect: repeating a string 100 times does not make it take up 100 times as much memory.
+
+```{r}
+banana <- "bananas bananas bananas"
+obj_size(banana)
+
+obj_size(rep(banana, 100))
+```
+References also add complexity when thinking about the size of individual objects. obj_size(x) + obj_size(y) will only equal obj_size(x, y) if there are no shared values. Below, the combined size of x and y is the same as the size of y:
+
+```{r}
+obj_size(x, y)
+```
+
+Finally, R 3.5.0 and later versions have a surprising feature: ALTREP, **alternative representation**. This allows R to represent certain types of vectors very compactly. The place you are most likely to see this is with : because instead of storing every single number in the sequence, R just stores the first and last number. This means that every sequence, no matter how large, is the same size:
+
+```{r}
+obj_size(1:3)
+#> 680 B
+obj_size(1:1e3)
+#> 680 B
+obj_size(1:1e6)
+#> 680 B
+obj_size(1:1e9)
+#> 680 B
+```
+
+#### Excercises
+
+```{r}
+y <- rep(list(runif(1e4)), 100)
+
+object.size(y)
+#> 8005648 bytes
+obj_size(y)
+#> 80,896 B
+```
+```{r}
+?object.size # does not detect if elements of a list are shared and therefore gives a larger estimate of object size
+```
+
+```{r}
+funs <- list(mean, sd, var)
+obj_size(funs)
+#> 17,608 B
+```
+```{r}
+a <- runif(1e6)
+obj_size(a) # 8,000,048 B
+
+b <- list(a, a)
+obj_size(b) # 8,000,112 B only slightly larger than original as pointing to a
+obj_size(a, b) # same size as B
+
+#b
+
+b[[1]][[1]] <- 10
+
+obj_size(b) # 16,000,160 B
+obj_size(a, b) # 16,000,160 B
+
+b[[2]][[1]] <- 10
+obj_size(b) # 16,000,160 B
+obj_size(a, b) # 24,000,208 B
+```
+### Modify in place
+
+As seen, modifying an object usually creates a copy. There are two exceptions:
+
+ - Objects with a single binding get a special performance optimisation.
+ - Environments, a special type of object, are always modified in place.
+ 
+#### Objects with a single binding
+
+**If an object has single name bound to it, R will modify it in place.
+
+```{r}
+v <- c(1, 2, 3)
+
+v[[3]] <- 4
+
+```
+
+Above, the same object will be modified, no copy will be made.
+
+**Note: that above, the function `tracemem()` will reveal a copy is being made here.** As below:
+
+```{r}
+v <- c(1, 2, 3)
+tracemem(v)
+v[[3]] <- 4
+tracemem(v)
+```
+
+```{r}
+untracemem(v)
+```
+
+This is apparently due to this code being run in R Studio. As described here: https://stackoverflow.com/questions/15559387/operator-in-rstudio-and-r
+
+"Rstudio's object browser modifies objects it examines in a way that forces copying upon modification."
+
+**End note**
+
+Two complications make predicting exactly when R applies this optimisation challenging:
+
+ - With regards to bindings, R currently counts 0, 1 or many. Therefore if an object have two bindings, and one is removed, the reference count does not go back to 1. Therefore, R will make copies when it sometimes doesn't need to.
+ - Whenever you call the vast majority of functions, it makes a reference to the object. The only exception are specially written “primitive” C functions. These can only be written by R-core and occur mostly in the base package.
+ 
+Thus is can be difficult to predict whether a copy will be made, so it is best to use `tracemem()`
+
+We can explore these issues with a for loop - the slowness of which in R is caused by every iteration of the loop creating a copy. The following subtracts the median from each column of a data frame:
+
+```{r}
+x <- data.frame(matrix(runif(5 * 1e4), ncol = 5))
+medians <- vapply(x, median, numeric(1))
+
+for (i in seq_along(medians)) {
+  x[[i]] <- x[[i]] - medians[[i]]
+}
+
+```
+
+This loop is slow because each iteration of the loop copies the data frame.
+
+```{r}
+cat(tracemem(x), "\n")
+
+for (i in 1:5) {
+  x[[i]] <- x[[i]] - medians[[i]]
+}
+```
+```{r}
+untracemem(x)
+```
+
+The number of copies can be reduced by using a list instead of a data frame. Modifying a list uses internal C code.
+
+```{r}
+y <- as.list(x)
+cat(tracemem(y), "\n")
+  
+for (i in 1:5) {
+  y[[i]] <- y[[i]] - medians[[i]]
+}
+
+#tracemem[0x000001b631501bc8 -> 0x000001b631f6f428]: 
+```
+*Preventing copies from being made can be tricky*
+
+#### Environments
+
+**Environments are always modified in place.** This sometimes referred to as **reference semantics** because when you modify an environment, all existing bindings to that environment will continue to have the same reference.
+
+We bind the following environment to e1 and e2.
+
+```{r}
+e1 <- rlang::env(a = 1, b = 2, c = 3)
+e2 <- e1
+e1
+e2
+```
+
+If we change a binding, the environment is modified in place:
+
+```{r}
+e1$c <- 4
+# above we changed the e1 environment binding of c. Due to modify in place, e2 has has the same change:
+e2$c
+#4
+```
+Due to this property, environments can contain themselves:
+
+```{r}
+e <- rlang::env()
+e$self <- e
+
+ref(e)
+
+# [1:0x1b632df1420] <env> 
+#\-self = [1:0x1b632df1420] 
+```
+
+### Unbinding and the garbage collector
+
+Example code:
+
+```{r}
+x <- 1:3
+
+x <- 2:4
+
+rm(x)
+
+x
+```
+Following the creation of two objects, these objects are no longer bound to a name at the end of the chunk as x is `rm()`
+
+The objects are deleted by the *garbage collector* (GC). This frees up memory by deleting objects that are no longer used and requesting more memory from the OS.
+
+R uses a tracing GC - is traces every object that's reachable from the global environment and all object reachable from those objects.
+
+GC runs automatically whenever R needs more memory.
+
+Use `gcinfo(TRUE)` and a message is printed whenever GC is run.
+
+Can force gc by calling `gc()`:
+
+```{r}
+gc()
+```
+Not really useful.
+
+`lobstr::mem_used()` is a wrapper around gc() and informs us of the total number of bytes used.
+
+```{r}
+mem_used()
+```
+
+## Vectors
+
+
