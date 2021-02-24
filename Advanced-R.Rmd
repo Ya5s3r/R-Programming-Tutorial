@@ -316,7 +316,7 @@ ref(x, character = TRUE)
 ```
 We can see the the first two characters in the vector reference the same string in the global string pool. This is important when considereing the amount of memory a character vector uses.
 
-#### Excercises
+#### Exercises
 
 tracemem(1:10) is not useful as no object is being referenced, or stored in memory, so we then can't track it.
 
@@ -398,7 +398,7 @@ obj_size(1:1e9)
 #> 680 B
 ```
 
-#### Excercises
+#### Exercises
 
 ```{r}
 y <- rep(list(runif(1e4)), 100)
@@ -592,4 +592,154 @@ mem_used()
 
 ## Vectors
 
+Will discuss how the different vector types fit together as a whole. 
+
+Vectors are of two types, atomic vectors and lists. The difference relates to their elements' types. Atomic vectors have elements of the same type. List elements can be of different types.
+
+Although not a vector, `NULL` is like a vector and often has the role of a generic zero length vector.
+
+Every vector can also have `attributes` - named list of arbitrary metadata. Two attributes are important, the dimension attribute turns vectors into matrices and arrays and the class attribute powers the S3 object system.
+
+Will discuss important S3 vectors: factors, date and times, data frames and tibbles. R considers data frames and matrices to be vectors (although these 2D structures may not be what comes to mind when thinking about vectors).
+
+### Atomic vectors
+
+*There are four primary types of atomic vectors:* **logical, integer, double and character (which contains strings).** 
+
+Together, integer and double vectors are known as numeric vectors.
+
+There are two rare types, complex and raw - not discussed further here.
+
+#### Scalars
+
+Each of the four primary types has a special syntax to create an individual value - a **scalar**.
+
+ - Logicals can be written in full `TRUE` or `FALSE`, or abbreviated `T` or `F`.
+ - Doubles can be specified in decimal (`0.1234`), scientific (`1.23e4`), or hexadecimal (`0xcafe`) form. There are three special values unique to doubles: `Inf`,
+   `-Inf` and `NaN` (not a number).
+ - Integers are written similarly to doubles, but are followed by an `L`, and cannot contain fractional values.
+ - Strings are encompassed by `"` or `'` e.g. `"hi"` or `'bye'`. Special characters are escaped with `\`. `?Quotes` provides further details.
+ 
+#### Making longer vectors with c()
+
+To make long vectors from shorter ones, use c(), which is short for combine:
+
+```{r}
+lgl_var <- c(TRUE, FALSE)
+int_var <- c(1L, 6L, 10L)
+dbl_var <- c(1, 2.5, 4.5)
+chr_var <- c("these are", "some strings")
+```
+
+When the inputs are atomic vectors, c() always creates another atomic vector, in other words, it flattens:
+
+```{r}
+c(c(1,2), c(3, 4))
+```
+
+Use `typeof()` and `length()` to determine the type and length of the vector, respectively.
+
+```{r}
+typeof(lgl_var)
+#> [1] "logical"
+typeof(int_var)
+#> [1] "integer"
+typeof(dbl_var)
+#> [1] "double"
+typeof(chr_var)
+#> [1] "character"
+```
+
+#### Missing values
+
+R represents missing or unknown values with `NA` (not applicable). Most computations that contain a missing value will return a missing value:
+
+```{r}
+NA > 5
+10 * NA
+
+```
+
+A common mistake when identifying missing values in a vector:
+
+```{r}
+x <- c(NA, 5, NA, 10)
+x == NA
+#> [1] NA NA NA NA
+```
+You should use is.na() to test for the presence of a missing value:
+
+```{r}
+is.na(x)
+```
+
+There are actually four missing values, one for each of the atomic types: `NA` (logical), `NA_integer_` (integer), `NA_real_` (double), and `NA_character_` (character). 
+
+#### Testing and coercion
+
+You can test if a vector is of a given type with an `is.*()` function. However, use these with care. The following can be used and work as expected:
+
+ - `is.logical()`
+ - `is.integer()`
+ - `is.double()`
+ - `is.character()`
+
+Don't use `is.vector()`, `is.atomic()`, and `is.numeric()`, they don't work as expected.
+
+For atomic vectors, type is a property of the entire vector: all elements must be the same type. When you attempt to combine different types they will be coerced in a fixed order: character → double → integer → logical. For example, combining a character and an integer yields a character:
+
+```{r}
+str(c("a", 1))
+#>  chr [1:2] "a" "1"
+```
+
+Above, the 1 is coerced into a character.
+
+This type of coercion occurs automatically. Many mathematical functions (`+`, `log` etc) coerce to numeric. This is helpful with logical vectors, as `TRUE` becomes `1` and `FALSE` becomes `0`.
+
+```{r}
+x <- c(FALSE, FALSE, TRUE)
+as.numeric(x)
+#> [1] 0 0 1
+
+# Total number of TRUEs
+sum(x)
+#> [1] 1
+
+# Proportion that are TRUE
+mean(x)
+#> [1] 0.333
+```
+You can intentionally coerce by using as `as.*()` function, such as `as.logical()`, `as.integer()`, `as.double()`, or `as.character()`. The failed coercion of strings generates a warning and a missing value.
+
+```{r}
+as.integer(c("1", "1.5", "a"))
+#> Warning: NAs introduced by coercion
+#> [1]  1  1 NA
+```
+
+#### Exercises
+
+ - vector coercion rules:
+ 
+```{r}
+c(1, FALSE)
+# 1 0 coerced into double
+c("a", 1)
+# "a" "1" coerced into character
+c(TRUE, 1L)
+# 1 1 coerced into double
+```
+
+```{r}
+1 == "1"
+# TRUE as "1" is coerced into a numeric
+-1 < FALSE
+# TRUE as FALSE is coerced into a numeric and becomes 0
+"one" < 2
+# FALSE as appears as though 2 is coerced into character
+
+```
+
+### Attributes
 
