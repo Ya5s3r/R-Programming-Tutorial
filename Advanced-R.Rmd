@@ -743,3 +743,51 @@ c(TRUE, 1L)
 
 ### Attributes
 
+Notice that the aforementioned set of atomic vectors doesn't include important data structures like matrices, arrays, factors, or date-times. These types are built on top of atomic vectors by adding attributes. Here will discuss how the dim attribute makes matrices and arrays, and following this, will discuss how the class attribute creates S3 vectors, including factors, dates and date-times.
+
+#### Getting and setting
+
+You can think of attributes as name-value pairs - they attach metadata to an object. Individual attributes can be retrieved and modified  with `attr()`, or retrieved en masse with `attributes()`, and set en masse with `structure()`.
+
+```{r}
+a <- 1:3
+# set attribute
+attr(a, "x") <- "abcdef"
+# get attribute
+attr(a, "x")
+
+attr(a, "y") <- 4:6
+# get all attributes
+str(attributes(a))
+
+# Or equivalently
+
+a <- structure(
+  1:3,
+  x = "abcdef",
+  y = 4:6
+)
+
+str(attributes(a))
+
+```
+
+Such attributes should generally be thought of as non-permanent i.e most attributes are lost by most operations:
+
+```{r}
+attributes(a[1])
+# NULL
+
+attributes(sum(a))
+# NULL
+```
+
+Generally only two attributes preserved:
+
+ - **names**, a character vector giving each element a name
+ - **dim**, short for dimension, an integer vector, used to turn vectors into matrices or arrays.
+ 
+To preserve other attributes, we will need to create our own S3 class, discussed later.
+
+#### Names
+
